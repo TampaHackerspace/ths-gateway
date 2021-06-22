@@ -1,0 +1,38 @@
+#!/bin/bash
+# This searchs Wild Apricot by slackid and checks for a public ssh key.
+#
+# Install 
+#    1) Move file to /usr/local/bin/sshKeyCheck
+#    2) Set permission to 700 / chown root
+#    3) edit/add /etc/ssh/sshd.config
+#            AuthorizedKeysCommand /usr/local/bin/sshKeyCheck
+#            AuthorizedKeysCommandUser root
+# 
+# Changelog:
+# 05/13/21 - Carl - Initial version
+set -eo pipefail
+
+logger "waSSH:Performing authentication"
+
+if [[ -z "${WA_ACCESSKEY}" ]]; then
+  logger "WA_ACCESSKEY Not defined. Set to 'APIKEY:keyHereFromWA' and base64 encode"
+  echo "WA_ACCESSKEY Not defined. Set to 'APIKEY:keyHereFromWA' and base64 encode"
+  exit 1
+fi
+
+
+TOKEN=$(curl -s -X POST https://oauth.wildapricot.org/auth/token \
+ -H "Authorization: Basic $WA_ACCESSKEY" \
+ -H 'Content-Type: application/x-www-form-urlencoded'\
+ -d 'scope=auto&grant_type=client_credentials' \
+ | sed -n 's|.*access_token":"\([^"]*\).*|\1|p')
+
+logger "waSSH:Searching for user"
+KEY=$(curl -s -X GET "https://api.wildapricot.org/v2/Accounts/287785/contacts?%24async=false&%24select='public%20ssh%20key'&%24filter=slackid%20eq%20$1" \
+ -H "Authorization: Bearer $TOKEN"\
+ -H 'Content-Type: application/json' \
+ | sed -n 's|.*SSH Key","Value":"\([^"]*\).*|\1|p')
+
+logger "waSSH:Public Key: $KEY"
+
+echo $KEY
